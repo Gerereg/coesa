@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 --index-url https://pypi.org/simple
 --extra-index-url https://download.pytorch.org/whl/cpu
 
@@ -10,4 +11,18 @@ python-dotenv==1.0.0
 streamlit==1.42.2
 folium==0.19.4
 streamlit-folium==0.24.0
+=======
+--index-url https://pypi.org/simple
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+setuptools>=65.5.1
+wheel>=0.38.4
+numpy==2.2.3
+pandas==2.2.3
+requests==2.31.0
+python-dotenv==1.0.0
+streamlit==1.42.2
+folium==0.19.4
+streamlit-folium==0.24.0
+>>>>>>> a2622d63a6b1201a228824d34f75578498cad150
 googlemaps==4.2.0 
