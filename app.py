@@ -401,6 +401,26 @@ def main():
     
     st.title("🏢 Calcolatore Superficie Edifici")
     
+    st.markdown("""
+    ### Come utilizzare:
+    1. Scegli la modalità:
+       - **Singolo Indirizzo**: Inserisci un indirizzo e visualizza il risultato sulla mappa
+       - **Carica File**: Carica un file con multiple indirizzi e ottieni i risultati in formato CSV
+    
+    ### Formati file supportati:
+    - CSV (con una colonna contenente gli indirizzi)
+    - TXT (un indirizzo per riga)
+    - Excel (XLSX)
+    
+    ### Note:
+    - La precisione del calcolo dipende dalla qualità dei dati OpenStreetMap
+    - Per risultati migliori, inserisci gli indirizzi nel formato più completo possibile
+    - L'area calcolata è approssimativa
+    - Clicca su una riga nella tabella dei risultati per visualizzare la mappa corrispondente
+    """)
+    
+    st.markdown("---")
+    
     # Tab per scegliere la modalità
     tab1, tab2 = st.tabs(["Singolo Indirizzo", "Carica File"])
     
@@ -520,23 +540,6 @@ def main():
                         visualizza_mappa(mappa, st.session_state.mappa_selezionata, len(mappe))
 
     st.markdown("---")
-    st.markdown("""
-    ### Come utilizzare:
-    1. Scegli la modalità:
-       - **Singolo Indirizzo**: Inserisci un indirizzo e visualizza il risultato sulla mappa
-       - **Carica File**: Carica un file con multiple indirizzi e ottieni i risultati in formato CSV
-    
-    ### Formati file supportati:
-    - CSV (con una colonna contenente gli indirizzi)
-    - TXT (un indirizzo per riga)
-    - Excel (XLSX)
-    
-    ### Note:
-    - La precisione del calcolo dipende dalla qualità dei dati OpenStreetMap
-    - Per risultati migliori, inserisci gli indirizzi nel formato più completo possibile
-    - L'area calcolata è approssimativa
-    - Clicca su una riga nella tabella dei risultati per visualizzare la mappa corrispondente
-    """)
 
 if __name__ == "__main__":
     main() 
