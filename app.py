@@ -195,11 +195,17 @@ def processa_file(file):
     try:
         # Leggi il file come DataFrame
         if file.name.endswith('.csv'):
+            st.info("Lettura file CSV...")
             df = pd.read_csv(file)
         elif file.name.endswith('.xlsx'):
+            st.info("Lettura file Excel...")
             df = pd.read_excel(file)
         else:  # Assume che sia un file di testo
+            st.info("Lettura file di testo...")
             df = pd.read_csv(file, header=None, names=['Indirizzo'])
+        
+        st.write("Anteprima del file caricato:")
+        st.dataframe(df.head())
         
         # Assicurati che ci sia una colonna con gli indirizzi
         colonna_indirizzi = None
@@ -210,6 +216,9 @@ def processa_file(file):
         
         if not colonna_indirizzi:
             colonna_indirizzi = df.columns[0]
+            st.warning(f"Nessuna colonna 'indirizzo' trovata. Uso la prima colonna: {colonna_indirizzi}")
+        else:
+            st.success(f"Colonna indirizzi trovata: {colonna_indirizzi}")
         
         # Inizializza la progress bar e il contatore
         total_rows = len(df)
@@ -217,9 +226,12 @@ def processa_file(file):
         status_text = st.empty()
         processed = 0
         
+        # Inizializza la lista dei risultati con None per mantenere l'ordine
+        risultati = [None] * total_rows
+        coordinate_edifici = [None] * total_rows
+        
         # Step 1: Estrai tutte le coordinate
         status_text.text("Fase 1: Estrazione coordinate...")
-        coordinate_edifici = []
         
         # Processa gli indirizzi in batch per evitare sovraccarichi
         batch_size = 5
@@ -227,29 +239,35 @@ def processa_file(file):
             batch = df.iloc[i:min(i + batch_size, total_rows)]
             with ThreadPoolExecutor(max_workers=5) as executor:
                 futures = []
-                for _, row in batch.iterrows():
-                    futures.append(executor.submit(ottieni_coordinate, str(row[colonna_indirizzi])))
+                for idx, row in batch.iterrows():
+                    indirizzo_input = str(row[colonna_indirizzi]).strip()
+                    st.write(f"Elaborazione indirizzo: {indirizzo_input}")
+                    futures.append((idx, executor.submit(ottieni_coordinate, indirizzo_input)))
                 
-                for future in as_completed(futures):
+                for idx, future in futures:
                     try:
                         lat, lon, indirizzo_completo = future.result()
-                        coordinate_edifici.append({
-                            'indirizzo': str(df.iloc[processed][colonna_indirizzi]),
+                        st.write(f"Risultato geocoding per {df.iloc[idx][colonna_indirizzi]}:")
+                        st.write(f"- Indirizzo trovato: {indirizzo_completo}")
+                        st.write(f"- Coordinate: {lat}, {lon}")
+                        
+                        coordinate_edifici[idx] = {
+                            'indirizzo': str(df.iloc[idx][colonna_indirizzi]),
                             'indirizzo_completo': indirizzo_completo,
                             'lat': lat,
                             'lon': lon
-                        })
+                        }
                         processed += 1
                         progress_bar.progress(processed / (total_rows * 2))
                     except Exception as e:
-                        st.warning(f"Errore nel processare un indirizzo: {str(e)}")
-                        coordinate_edifici.append({
-                            'indirizzo': str(df.iloc[processed][colonna_indirizzi]),
+                        st.error(f"Errore nel processare l'indirizzo {df.iloc[idx][colonna_indirizzi]}: {str(e)}")
+                        coordinate_edifici[idx] = {
+                            'indirizzo': str(df.iloc[idx][colonna_indirizzi]),
                             'indirizzo_completo': None,
                             'lat': None,
                             'lon': None,
                             'error': str(e)
-                        })
+                        }
                         processed += 1
                         progress_bar.progress(processed / (total_rows * 2))
         
@@ -258,21 +276,24 @@ def processa_file(file):
         processed = 0
         
         # Processa le superfici in batch
-        for i in range(0, len(coordinate_edifici), batch_size):
-            batch = coordinate_edifici[i:min(i + batch_size, len(coordinate_edifici))]
+        for i in range(0, total_rows, batch_size):
+            batch = coordinate_edifici[i:min(i + batch_size, total_rows)]
             with ThreadPoolExecutor(max_workers=5) as executor:
                 futures = []
-                for coord in batch:
+                for idx, coord in enumerate(batch, start=i):
                     if coord['lat'] and coord['lon']:
-                        futures.append(executor.submit(calcola_superficie_edificio, coord['lat'], coord['lon']))
+                        st.write(f"Calcolo superficie per {coord['indirizzo']} ({coord['lat']}, {coord['lon']})")
+                        futures.append((idx, coord, executor.submit(calcola_superficie_edificio, coord['lat'], coord['lon'])))
                     else:
-                        futures.append(None)
+                        futures.append((idx, coord, None))
                 
-                for j, future in enumerate(futures):
-                    coord = batch[j]
+                for idx, coord, future in futures:
                     try:
                         if future:
                             area, coordinates, messaggio = future.result()
+                            st.write(f"Risultato calcolo superficie per {coord['indirizzo']}:")
+                            st.write(f"- Area: {area if area else 'Non calcolata'}")
+                            st.write(f"- Stato: {messaggio}")
                             
                             if coordinates:
                                 mappe.append({
@@ -284,48 +305,54 @@ def processa_file(file):
                                     'indirizzo_input': coord['indirizzo']
                                 })
                             
-                            risultati.append({
+                            risultati[idx] = {
                                 'Indirizzo_Input': coord['indirizzo'],
                                 'Indirizzo_Trovato': coord['indirizzo_completo'],
                                 'Latitudine': coord['lat'],
                                 'Longitudine': coord['lon'],
                                 'Superficie_m2': area if area else None,
                                 'Stato': messaggio if area else "Calcolo superficie non riuscito"
-                            })
+                            }
                         else:
-                            risultati.append({
+                            risultati[idx] = {
                                 'Indirizzo_Input': coord['indirizzo'],
                                 'Indirizzo_Trovato': None,
                                 'Latitudine': None,
                                 'Longitudine': None,
                                 'Superficie_m2': None,
                                 'Stato': 'Indirizzo non trovato' if not coord.get('error') else f"Errore: {coord['error']}"
-                            })
+                            }
                         
                         processed += 1
                         progress_bar.progress(0.5 + processed / (total_rows * 2))
                     except Exception as e:
-                        st.warning(f"Errore nel calcolo della superficie: {str(e)}")
-                        risultati.append({
+                        st.error(f"Errore nel calcolo della superficie per {coord['indirizzo']}: {str(e)}")
+                        risultati[idx] = {
                             'Indirizzo_Input': coord['indirizzo'],
                             'Indirizzo_Trovato': coord['indirizzo_completo'],
                             'Latitudine': coord['lat'],
                             'Longitudine': coord['lon'],
                             'Superficie_m2': None,
                             'Stato': f'Errore durante il calcolo: {str(e)}'
-                        })
+                        }
                         processed += 1
                         progress_bar.progress(0.5 + processed / (total_rows * 2))
         
         status_text.text("Elaborazione completata!")
         progress_bar.empty()
-        status_text.empty()
+        
+        # Crea il DataFrame mantenendo l'ordine originale
+        risultati_df = pd.DataFrame(risultati)
+        st.write("### Riepilogo elaborazione")
+        st.write(f"- Totale indirizzi processati: {len(risultati)}")
+        st.write(f"- Superfici calcolate con successo: {len([r for r in risultati if r['Superficie_m2'] is not None])}")
+        st.write(f"- Errori riscontrati: {len([r for r in risultati if r['Superficie_m2'] is None])}")
         
         if not risultati:
             st.warning("Nessun risultato ottenuto dall'elaborazione del file.")
             return pd.DataFrame(), []
             
-        return pd.DataFrame(risultati), mappe
+        return risultati_df, mappe
     
     except Exception as e:
         st.error(f"Errore durante l'elaborazione del file: {str(e)}")
